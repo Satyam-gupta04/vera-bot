@@ -149,6 +149,10 @@ async def tick(body: TickBody):
         if not composed.get("body"):
             continue
 
+        from store import is_duplicate_body
+        if is_duplicate_body(conversation_id, composed["body"]):
+            continue
+
 
         conversation_id = f"conv_{merchant_id}_{trigger_id}_{uuid.uuid4().hex[:8]}"
 

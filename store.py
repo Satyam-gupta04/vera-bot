@@ -105,3 +105,10 @@ def suppress(key: str):
     Mark a suppression key as used.
     """
     suppressed_keys.add(key)
+
+def is_duplicate_body(conversation_id: str, body: str) -> bool:
+    history = conversations.get(conversation_id, [])
+    for turn in history:
+        if turn.get("message") == body and turn.get("role") == "vera":
+            return True
+    return False
