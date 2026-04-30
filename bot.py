@@ -66,7 +66,7 @@ async def metadata():
         "team_members": ["Satyam Gupta"],
         "model": "claude-sonnet-4-20250514",
         "approach": "4-context composer with trigger routing, auto-reply detection, and intent transition handling",
-        "contact_email": "your-real-email@gmail.com",
+        "contact_email": "satyamguptabth0017@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.utcnow().isoformat() + "Z"
     }
