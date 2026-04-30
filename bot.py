@@ -1,7 +1,7 @@
 import time
 import uuid
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, Response 
 from pydantic import BaseModel
 from typing import Any
 import json
@@ -73,8 +73,20 @@ async def metadata():
     }
 
 
+VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
+
 @app.post("/v1/context")
 async def push_context(body: ContextBody):
+    if body.scope not in VALID_SCOPES:
+        return Response(
+            content=json.dumps({
+                "accepted": False,
+                "reason": "invalid_scope",
+                "details": f"scope must be one of {list(VALID_SCOPES)}"
+            }),
+            status_code=400,
+            media_type="application/json"
+        )
     result = store_context(
         scope=body.scope,
         context_id=body.context_id,
@@ -82,7 +94,6 @@ async def push_context(body: ContextBody):
         payload=body.payload
     )
     if not result["accepted"]:
-        from fastapi import Response
         return Response(
             content=json.dumps(result),
             status_code=409,
