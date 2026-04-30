@@ -67,7 +67,30 @@ STOP_PHRASES = [
     "stop messaging",
     "stop sending",
 ]
+OFF_TOPIC_PHRASES = [
+    "gst",
+    "income tax",
+    "filing",
+    "loan",
+    "insurance",
+    "legal",
+    "court",
+    "police",
+    "help me with",
+    "can you also",
+]
 
+HOSTILE_PHRASES = [
+    "idiot",
+    "stupid",
+    "useless bot",
+    "worst",
+    "bakwas",
+    "bekar",
+    "chutiya",
+    "bc",
+    "mc",
+]
 
 def is_auto_reply(message: str) -> bool:
     """
@@ -139,6 +162,22 @@ def handle_reply(
             "rationale": "Merchant explicitly opted out or expressed disinterest. Closing conversation and suppressing future messages."
         }
 
+    if any(phrase in message.lower() for phrase in HOSTILE_PHRASES):
+        return {
+            "action": "send",
+            "body": "Samajh sakta hoon — agar kabhi listing ya campaigns pe kaam karna ho toh batayein. 🙏",
+            "cta": "none",
+            "rationale": "Hostile message detected. Responded politely and left door open."
+    }
+
+
+    if any(phrase in message.lower() for phrase in OFF_TOPIC_PHRASES):
+        return {
+            "action": "send",
+            "body": "GST/legal matters meri expertise nahi hai — uske liye CA se baat karein. Main aapki magicpin listing aur customers ke liye yahan hoon. Kuch aur help karoon?",
+            "cta": "open_ended",
+            "rationale": "Off-topic request detected. Politely declined and redirected."
+    }
 
     if is_auto_reply(message):
         auto_reply_count = count_auto_replies(conversation)
