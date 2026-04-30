@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Any
+import json
 
 from loader import load_all_data
 
@@ -74,13 +75,19 @@ async def metadata():
 
 @app.post("/v1/context")
 async def push_context(body: ContextBody):
-
     result = store_context(
         scope=body.scope,
         context_id=body.context_id,
         version=body.version,
         payload=body.payload
     )
+    if not result["accepted"]:
+        from fastapi import Response
+        return Response(
+            content=json.dumps(result),
+            status_code=409,
+            media_type="application/json"
+        )
     return result
 
 
@@ -212,6 +219,15 @@ async def reply(body: ReplyBody):
 
 import threading
 
+@app.post("/v1/teardown")
+async def teardown():
+    from store import contexts, conversations, suppressed_keys
+    contexts.clear()
+    conversations.clear()
+    suppressed_keys.clear()
+    return {"status": "wiped", "ts": datetime.utcnow().isoformat() + "Z"}
+
+
 def keep_alive():
     import time
     import urllib.request
@@ -226,6 +242,7 @@ def keep_alive():
         time.sleep(840)  # ping every 14 minutes
 
 threading.Thread(target=keep_alive, daemon=True).start()
+
 
 if __name__ == "__main__":
     import uvicorn
