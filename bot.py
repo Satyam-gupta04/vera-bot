@@ -61,13 +61,12 @@ async def healthz():
 
 @app.get("/v1/metadata")
 async def metadata():
-    
     return {
-        "team_name": "Sattu",
-        "team_members": ["Sattu"],
+        "team_name": "Satyam Gupta",
+        "team_members": ["Satyam Gupta"],
         "model": "claude-sonnet-4-20250514",
         "approach": "4-context composer with trigger routing, auto-reply detection, and intent transition handling",
-        "contact_email": "your-email@example.com",
+        "contact_email": "your-real-email@gmail.com",
         "version": "1.0.0",
         "submitted_at": datetime.utcnow().isoformat() + "Z"
     }
@@ -210,6 +209,7 @@ async def reply(body: ReplyBody):
     )
 
     return result
+
 import threading
 
 def keep_alive():
