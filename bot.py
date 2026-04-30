@@ -210,7 +210,22 @@ async def reply(body: ReplyBody):
     )
 
     return result
+import threading
 
+def keep_alive():
+    import time
+    import urllib.request
+    while True:
+        try:
+            urllib.request.urlopen(
+                "https://vera-bot-reg3.onrender.com/v1/healthz",
+                timeout=10
+            )
+        except:
+            pass
+        time.sleep(840)  # ping every 14 minutes
+
+threading.Thread(target=keep_alive, daemon=True).start()
 
 if __name__ == "__main__":
     import uvicorn
