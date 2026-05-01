@@ -12,7 +12,7 @@ def load_all_data(expanded_dir: str = "expanded"):
                 with open(os.path.join(categories_dir, filename)) as f:
                     payload = json.load(f)
                 slug = payload.get("slug", filename.replace(".json", ""))
-                store_context("category", slug, 1, payload)
+                store_context("category", slug, 0, payload)
         print("  Categories loaded")
 
     merchants_dir = os.path.join(expanded_dir, "merchants")
@@ -23,7 +23,7 @@ def load_all_data(expanded_dir: str = "expanded"):
                 with open(os.path.join(merchants_dir, filename)) as f:
                     payload = json.load(f)
                 merchant_id = payload.get("merchant_id", filename.replace(".json", ""))
-                store_context("merchant", merchant_id, 1, payload)
+                store_context("merchant", merchant_id, 0, payload)
                 count += 1
         print(f"  {count} merchants loaded")
 
@@ -35,7 +35,7 @@ def load_all_data(expanded_dir: str = "expanded"):
                 with open(os.path.join(customers_dir, filename)) as f:
                     payload = json.load(f)
                 customer_id = payload.get("customer_id", filename.replace(".json", ""))
-                store_context("customer", customer_id, 1, payload)
+                store_context("customer", customer_id, 0, payload)
                 count += 1
         print(f"  {count} customers loaded")
 
@@ -47,7 +47,7 @@ def load_all_data(expanded_dir: str = "expanded"):
                 with open(os.path.join(triggers_dir, filename)) as f:
                     payload = json.load(f)
                 trigger_id = payload.get("id", filename.replace(".json", ""))
-                store_context("trigger", trigger_id, 1, payload)
+                store_context("trigger", trigger_id, 0, payload)
                 count += 1
         print(f"  {count} triggers loaded")
 

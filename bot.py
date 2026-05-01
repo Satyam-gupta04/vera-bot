@@ -1,12 +1,11 @@
 import time
 import uuid
+import json
+import threading
 from datetime import datetime
-from fastapi import FastAPI, Response 
+from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from typing import Any
-import json
-
-from loader import load_all_data
 
 from store import (
     store_context,
@@ -14,16 +13,19 @@ from store import (
     count_contexts,
     add_conversation_turn,
     is_suppressed,
-    suppress
+    suppress,
+    is_duplicate_body
 )
 from composer import compose
 from reply_handler import handle_reply
-
+from loader import load_all_data
 
 load_all_data()
 
 app = FastAPI()
 START_TIME = time.time()
+
+VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
 
 
 class ContextBody(BaseModel):
@@ -51,7 +53,6 @@ class ReplyBody(BaseModel):
 
 @app.get("/v1/healthz")
 async def healthz():
-    
     counts = count_contexts()
     return {
         "status": "ok",
@@ -66,14 +67,12 @@ async def metadata():
         "team_name": "Satyam Gupta",
         "team_members": ["Satyam Gupta"],
         "model": "claude-sonnet-4-20250514",
-        "approach": "4-context composer with trigger routing, auto-reply detection, and intent transition handling",
-        "contact_email": "satyamguptabth0017@gmail.com",
-        "version": "1.0.0",
+        "approach": "4-context composer with trigger routing, auto-reply detection, customer reply branching, and 10 gold-standard few-shot examples",
+        "contact_email": "your-real-email@gmail.com",
+        "version": "2.0.0",
         "submitted_at": datetime.utcnow().isoformat() + "Z"
     }
 
-
-VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
 
 @app.post("/v1/context")
 async def push_context(body: ContextBody):
@@ -104,26 +103,12 @@ async def push_context(body: ContextBody):
 
 @app.post("/v1/tick")
 async def tick(body: TickBody):
-
     actions = []
 
     for trigger_id in body.available_triggers:
-
-
         trigger = get_context("trigger", trigger_id)
         if not trigger:
             continue
-
-
-        expires_at = trigger.get("expires_at", "")
-        if expires_at and expires_at < body.now:
-            continue
-
-
-        suppression_key = trigger.get("suppression_key", "")
-        if suppression_key and is_suppressed(suppression_key):
-            continue
-
 
         merchant_id = trigger.get("merchant_id")
         if not merchant_id:
@@ -133,18 +118,25 @@ async def tick(body: TickBody):
         if not merchant:
             continue
 
-
         category_slug = merchant.get("category_slug", "")
         category = get_context("category", category_slug)
         if not category:
+            from store import contexts
+            for (scope, cid), entry in contexts.items():
+                if scope == "category":
+                    category = entry["payload"]
+                    break
+        if not category:
             continue
-
 
         customer = None
         customer_id = trigger.get("customer_id")
         if customer_id:
             customer = get_context("customer", customer_id)
 
+        suppression_key = trigger.get("suppression_key", "")
+        if suppression_key and is_suppressed(suppression_key):
+            continue
 
         try:
             composed = compose(
@@ -153,31 +145,23 @@ async def tick(body: TickBody):
                 trigger=trigger,
                 customer=customer
             )
-        except Exception as e:
+        except Exception:
             continue
-
 
         if not composed.get("body"):
             continue
 
-        from store import is_duplicate_body
+        conversation_id = f"conv_{merchant_id}_{trigger_id}_{uuid.uuid4().hex[:8]}"
+
         if is_duplicate_body(conversation_id, composed["body"]):
             continue
 
-
-        conversation_id = f"conv_{merchant_id}_{trigger_id}_{uuid.uuid4().hex[:8]}"
-
-
         add_conversation_turn(conversation_id, "vera", composed["body"])
-
 
         if suppression_key:
             suppress(suppression_key)
 
-
         trigger_kind = trigger.get("kind", "generic")
-        template_name = f"vera_{trigger_kind}_v1"
-
 
         action = {
             "conversation_id": conversation_id,
@@ -185,10 +169,10 @@ async def tick(body: TickBody):
             "customer_id": customer_id,
             "send_as": composed.get("send_as", "vera"),
             "trigger_id": trigger_id,
-            "template_name": template_name,
+            "template_name": f"vera_{trigger_kind}_v1",
             "template_params": [
                 merchant.get("identity", {}).get("owner_first_name", ""),
-                composed["body"][:100], 
+                composed["body"][:100],
                 composed.get("cta", "")
             ],
             "body": composed["body"],
@@ -199,7 +183,6 @@ async def tick(body: TickBody):
 
         actions.append(action)
 
-
         if len(actions) >= 20:
             break
 
@@ -208,31 +191,22 @@ async def tick(body: TickBody):
 
 @app.post("/v1/reply")
 async def reply(body: ReplyBody):
-    """
-    Judge sends merchant's reply here.
-    Bot must respond within 30 seconds.
-    Returns: send, wait, or end action.
-    """
-
-
     add_conversation_turn(
         body.conversation_id,
-        "merchant",
+        body.from_role,
         body.message
     )
 
-    
     result = handle_reply(
         conversation_id=body.conversation_id,
         merchant_id=body.merchant_id or "",
         customer_id=body.customer_id,
         message=body.message,
-        turn_number=body.turn_number
+        turn_number=body.turn_number,
+        from_role=body.from_role
     )
-
     return result
 
-import threading
 
 @app.post("/v1/teardown")
 async def teardown():
@@ -240,11 +214,13 @@ async def teardown():
     contexts.clear()
     conversations.clear()
     suppressed_keys.clear()
-    return {"status": "wiped", "ts": datetime.utcnow().isoformat() + "Z"}
+    return {
+        "status": "wiped",
+        "ts": datetime.utcnow().isoformat() + "Z"
+    }
 
 
 def keep_alive():
-    import time
     import urllib.request
     while True:
         try:
@@ -254,7 +230,8 @@ def keep_alive():
             )
         except:
             pass
-        time.sleep(840)  # ping every 14 minutes
+        time.sleep(840)
+
 
 threading.Thread(target=keep_alive, daemon=True).start()
 
