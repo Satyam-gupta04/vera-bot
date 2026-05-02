@@ -104,56 +104,81 @@ async def push_context(body: ContextBody):
 @app.post("/v1/tick")
 async def tick(body: TickBody):
     actions = []
+    print(f"\n[TICK] now={body.now} triggers={body.available_triggers}")
+    print(f"[TICK] contexts in store: {count_contexts()}")
 
     for trigger_id in body.available_triggers:
+        print(f"\n[TICK] processing trigger: {trigger_id}")
+
         trigger = get_context("trigger", trigger_id)
         if not trigger:
+            print(f"[TICK] trigger not found in store: {trigger_id}")
             continue
+        print(f"[TICK] trigger found: kind={trigger.get('kind')}")
 
         merchant_id = trigger.get("merchant_id")
         if not merchant_id:
+            print(f"[TICK] no merchant_id in trigger")
             continue
+        print(f"[TICK] merchant_id={merchant_id}")
 
         merchant = get_context("merchant", merchant_id)
         if not merchant:
+            print(f"[TICK] merchant not found: {merchant_id}")
+            print(f"[TICK] available merchants: {[k for (s,k) in __import__('store').contexts.keys() if s=='merchant'][:5]}")
             continue
+        print(f"[TICK] merchant found: {merchant.get('identity',{}).get('name','?')}")
 
         category_slug = merchant.get("category_slug", "")
+        print(f"[TICK] category_slug={category_slug}")
+
         category = get_context("category", category_slug)
         if not category:
+            print(f"[TICK] category not found: {category_slug}")
+            print(f"[TICK] available categories: {[k for (s,k) in __import__('store').contexts.keys() if s=='category']}")
             from store import contexts
             for (scope, cid), entry in contexts.items():
                 if scope == "category":
                     category = entry["payload"]
+                    print(f"[TICK] using fallback category: {cid}")
                     break
         if not category:
+            print(f"[TICK] no category at all — skipping")
             continue
+        print(f"[TICK] category found")
 
         customer = None
         customer_id = trigger.get("customer_id")
         if customer_id:
             customer = get_context("customer", customer_id)
+            print(f"[TICK] customer_id={customer_id}, found={customer is not None}")
 
         suppression_key = trigger.get("suppression_key", "")
         if suppression_key and is_suppressed(suppression_key):
+            print(f"[TICK] suppressed: {suppression_key}")
             continue
 
         try:
+            print(f"[TICK] composing message...")
             composed = compose(
                 category=category,
                 merchant=merchant,
                 trigger=trigger,
                 customer=customer
             )
-        except Exception:
+            print(f"[TICK] composed body length: {len(composed.get('body',''))}")
+        except Exception as e:
+            print(f"[TICK] compose error: {e}")
             continue
 
         if not composed.get("body"):
+            print(f"[TICK] empty body after compose")
             continue
 
         conversation_id = f"conv_{merchant_id}_{trigger_id}_{uuid.uuid4().hex[:8]}"
 
         if is_duplicate_body(conversation_id, composed["body"]):
+            print(f"[TICK] duplicate body")
             continue
 
         add_conversation_turn(conversation_id, "vera", composed["body"])
@@ -182,10 +207,12 @@ async def tick(body: TickBody):
         }
 
         actions.append(action)
+        print(f"[TICK] action added for {merchant_id}")
 
         if len(actions) >= 20:
             break
 
+    print(f"[TICK] returning {len(actions)} actions")
     return {"actions": actions}
 
 
