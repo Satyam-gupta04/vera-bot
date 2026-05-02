@@ -3,7 +3,7 @@ import os
 from store import store_context
 
 def load_all_data(expanded_dir: str = "expanded"):
-    print("Loading dataset into memory...")
+    print("Dataset loading skipped — waiting for judge to push context")
 
     categories_dir = os.path.join(expanded_dir, "categories")
     if os.path.exists(categories_dir):
