@@ -1,4 +1,4 @@
-LLM_PROVIDER = "anthropic"
+LLM_PROVIDER = "gemini"
 LLM_API_KEY = "AIzaSyD6XQ2gTriUaZmNHQgW3s7pWpzJC8VK42A"
 BOT_URL = "http://localhost:8080"
 LLM_MODEL = "" 
@@ -165,26 +165,84 @@ class AnthropicProvider(LLMProvider):
         return data["content"][0]["text"]
 
 
+# class GeminiProvider(LLMProvider):
+#     def __init__(self, api_key: str, model: str = ""):
+#         self.api_key = api_key
+#         self.model = model or "gemini-1.5-flash"
+
+#     def name(self) -> str:
+#         return f"Gemini ({self.model})"
+
+#     def complete(self, prompt: str, system: str = None) -> str:
+#         full_prompt = f"{system}\n\n{prompt}" if system else prompt
+#         body = json.dumps({
+#             "contents": [{"parts": [{"text": full_prompt}]}],
+#             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500}
+#         }).encode("utf-8")
+
+#         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+#         req = urlrequest.Request(url, data=body, headers={"Content-Type": "application/json"})
+#         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
+#         data = json.loads(resp.read().decode("utf-8"))
+#         return data["candidates"][0]["content"]["parts"][0]["text"]
+
 class GeminiProvider(LLMProvider):
     def __init__(self, api_key: str, model: str = ""):
         self.api_key = api_key
+        # Defaulting to 1.5 Flash is a solid choice for speed/cost
         self.model = model or "gemini-1.5-flash"
 
     def name(self) -> str:
         return f"Gemini ({self.model})"
 
     def complete(self, prompt: str, system: str = None) -> str:
-        full_prompt = f"{system}\n\n{prompt}" if system else prompt
-        body = json.dumps({
-            "contents": [{"parts": [{"text": full_prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500}
-        }).encode("utf-8")
+        # 1. Structure the payload correctly
+        # We separate 'contents' (the conversation) from 'system_instruction'
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 1500
+            }
+        }
 
+        # 2. Add System Instruction as a specific field, not a string prefix
+        if system:
+            payload["system_instruction"] = {
+                "parts": [{"text": system}]
+            }
+
+        body = json.dumps(payload).encode("utf-8")
+
+        # 3. Use the API key in the URL (standard for Gemini)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
-        req = urlrequest.Request(url, data=body, headers={"Content-Type": "application/json"})
-        resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
-        data = json.loads(resp.read().decode("utf-8"))
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        
+        req = urlrequest.Request(
+            url, 
+            data=body, 
+            headers={"Content-Type": "application/json"}
+        )
+
+        try:
+            # Note: TIMEOUT_LLM must be defined in your global scope
+            with urlrequest.urlopen(req, timeout=TIMEOUT_LLM) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                
+                # 4. Defensive parsing: Gemini can return empty candidates if blocked by safety filters
+                if "candidates" in data and data["candidates"]:
+                    candidate = data["candidates"][0]
+                    if "content" in candidate:
+                        return candidate["content"]["parts"][0]["text"]
+                
+                return "Error: No response generated (possibly blocked by safety filters)."
+
+        except Exception as e:
+            return f"Gemini API Error: {str(e)}"    
 
 
 class DeepSeekProvider(LLMProvider):
@@ -871,7 +929,6 @@ def main():
         print_info("Edit the CONFIGURATION section at the top of this file")
         print_info("Set your API key for your chosen provider")
         sys.exit(1)
-
 
     try:
         llm = create_provider()
