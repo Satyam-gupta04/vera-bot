@@ -520,16 +520,16 @@ def compose(
     prompt = build_prompt(category, merchant, trigger, customer)
 
     try:
+        print(f"[COMPOSE] calling Claude API...")
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
-            temperature=0,  
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}]
         )
 
         raw = response.content[0].text.strip()
+        print(f"[COMPOSE] raw response: {raw[:200]}")
 
         
         if "```" in raw:
@@ -567,10 +567,11 @@ def compose(
         }
 
     except Exception as e:
+        print(f"[COMPOSE ERROR] {str(e)}")
         return {
             "body": "",
             "cta": "none",
             "send_as": "vera",
             "suppression_key": trigger.get("suppression_key", ""),
-            "rationale": f"Compose error: {str(e)}"
-        }
+            "rationale": f"Error: {str(e)}"
+            }
