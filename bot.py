@@ -24,7 +24,7 @@ from loader import load_all_data
 
 app = FastAPI()
 START_TIME = time.time()
-# load_all_data()
+load_all_data()
 
 VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
 
@@ -67,7 +67,7 @@ async def metadata():
     return {
         "team_name": "Satyam Gupta",
         "team_members": ["Satyam Gupta"],
-        "model": "claude-sonnet-4-5",
+        "model": "gemini-1.5-flash",
         "approach": "4-context composer with trigger routing, auto-reply detection, customer reply branching, and 10 gold-standard few-shot examples",
         "contact_email": "your-real-email@gmail.com",
         "version": "2.0.0",

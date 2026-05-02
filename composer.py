@@ -1,11 +1,14 @@
 import os
 import json
-import anthropic
+import time
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_MODEL = "models/gemini-2.5-flash"
 
 FEW_SHOT_EXAMPLES = """
 EXAMPLE 1 — Dentists / research_digest / merchant-facing (50/50)
@@ -241,9 +244,12 @@ RULES
 9. Cite sources for research/compliance
 10. send_as = "{send_as}"
 
-Return ONLY valid JSON, no markdown, no backticks:
+IMPORTANT: You MUST respond with ONLY a valid JSON object. Do NOT write plain text. Do NOT include any explanation before or after the JSON.
+Start your response with {{ and end with }}.
+
+JSON OUTPUT (fill in the values):
 {{
-  "body": "the complete WhatsApp message",
+  "body": "the complete WhatsApp message here",
   "cta": "open_ended",
   "send_as": "{send_as}",
   "suppression_key": "{suppression_key}",
@@ -387,33 +393,55 @@ Add judgment — interpret what this means for them.
 ONE clear CTA at the end.""")
 
 
+def _call_gemini(prompt: str, max_tokens: int = 1000, retries: int = 3) -> str:
+    """Call Gemini with retry on 429 rate-limit errors."""
+    for attempt in range(retries):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=8192,
+                )
+            )
+            return response.text.strip()
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                wait = (attempt + 1) * 20
+                print(f"[GEMINI] 429 rate-limit, waiting {wait}s (attempt {attempt+1}/{retries})")
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError(f"Gemini still rate-limited after {retries} retries")
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Strip markdown fences and parse JSON from Gemini response."""
+    if "```" in raw:
+        parts = raw.split("```")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            if part.startswith("{"):
+                raw = part
+                break
+    return json.loads(raw.strip())
+
+
 def compose(category, merchant, trigger, customer=None):
     prompt = build_prompt(category, merchant, trigger, customer)
+    raw = ""
 
     try:
-        print(f"[COMPOSE] calling Claude API for trigger kind: {trigger.get('kind')}")
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=1000,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        raw = response.content[0].text.strip()
+        print(f"[COMPOSE] calling Gemini API for trigger kind: {trigger.get('kind')}")
+        raw = _call_gemini(prompt, max_tokens=1000)
         print(f"[COMPOSE] got response length: {len(raw)}")
         print(f"[COMPOSE] first 300 chars: {raw[:300]}")
 
-        if "```" in raw:
-            parts = raw.split("```")
-            for part in parts:
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    raw = part
-                    break
-
-        result = json.loads(raw.strip())
+        result = _parse_json_response(raw)
         body = result.get("body", "")
         print(f"[COMPOSE] parsed body length: {len(body)}")
 
@@ -427,7 +455,7 @@ def compose(category, merchant, trigger, customer=None):
 
     except json.JSONDecodeError as e:
         print(f"[COMPOSE JSON ERROR] {str(e)}")
-        print(f"[COMPOSE JSON ERROR] raw was: {raw[:300] if 'raw' in dir() else 'no raw'}")
+        print(f"[COMPOSE JSON ERROR] raw was: {raw[:300]}")
         return {
             "body": "",
             "cta": "none",

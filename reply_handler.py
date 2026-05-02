@@ -1,12 +1,55 @@
 import json
-import anthropic
+import time
+from google import genai
+from google.genai import types
 import os
 from dotenv import load_dotenv
 from store import get_conversation, add_conversation_turn, get_context
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_MODEL = "models/gemini-2.5-flash"
+
+
+def _call_gemini(prompt: str, max_tokens: int = 500, retries: int = 3) -> str:
+    """Call Gemini with retry on 429 rate-limit errors."""
+    for attempt in range(retries):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=max_tokens,
+                    response_mime_type="application/json",
+                )
+            )
+            return response.text.strip()
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                wait = (attempt + 1) * 10
+                print(f"[GEMINI] 429 rate-limit, waiting {wait}s (attempt {attempt+1}/{retries})")
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError(f"Gemini still rate-limited after {retries} retries")
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Strip markdown fences and parse JSON from Gemini response."""
+    if "```" in raw:
+        parts = raw.split("```")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            if part.startswith("{"):
+                raw = part
+                break
+    return json.loads(raw.strip())
+
 
 AUTO_REPLY_PATTERNS = [
     "thank you for contacting",
@@ -215,25 +258,8 @@ Return ONLY valid JSON:
 }}"""
 
     try:
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=500,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        raw = response.content[0].text.strip()
-        if "```" in raw:
-            parts = raw.split("```")
-            for part in parts:
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    raw = part
-                    break
-
-        result = json.loads(raw.strip())
+        raw = _call_gemini(prompt, max_tokens=500)
+        result = _parse_json_response(raw)
         add_conversation_turn(conversation_id, "vera", result.get("body", ""))
         return {
             "action": result.get("action", "send"),
@@ -299,25 +325,8 @@ Return ONLY valid JSON:
 }}"""
 
     try:
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=500,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        raw = response.content[0].text.strip()
-        if "```" in raw:
-            parts = raw.split("```")
-            for part in parts:
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    raw = part
-                    break
-
-        result = json.loads(raw.strip())
+        raw = _call_gemini(prompt, max_tokens=500)
+        result = _parse_json_response(raw)
         add_conversation_turn(conversation_id, "vera", result.get("body", ""))
         return {
             "action": result.get("action", "send"),
