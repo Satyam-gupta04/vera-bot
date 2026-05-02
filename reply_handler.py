@@ -119,7 +119,7 @@ def handle_reply(
         }
 
     # Customer reply — handle separately
-    if from_role == "customer":
+    if from_role.strip().lower() == "customer":
         return handle_customer_reply(
             conversation_id, merchant_id, customer_id, message, conversation
         )
@@ -216,7 +216,7 @@ Return ONLY valid JSON:
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-3-5-sonnet-20240620",
             max_tokens=500,
             temperature=0,
             messages=[{"role": "user", "content": prompt}]
@@ -300,7 +300,7 @@ Return ONLY valid JSON:
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-3-5-sonnet-20240620",
             max_tokens=500,
             temperature=0,
             messages=[{"role": "user", "content": prompt}]

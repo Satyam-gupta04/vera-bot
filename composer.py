@@ -393,7 +393,7 @@ def compose(category, merchant, trigger, customer=None):
     try:
         print(f"[COMPOSE] calling Claude API for trigger kind: {trigger.get('kind')}")
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-3-5-sonnet-20240620",
             max_tokens=1000,
             temperature=0,
             messages=[{"role": "user", "content": prompt}]

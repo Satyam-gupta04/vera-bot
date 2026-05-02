@@ -1,5 +1,5 @@
 LLM_PROVIDER = "anthropic"
-LLM_API_KEY = ""
+LLM_API_KEY = "AIzaSyD6XQ2gTriUaZmNHQgW3s7pWpzJC8VK42A"
 BOT_URL = "http://localhost:8080"
 LLM_MODEL = "" 
 
@@ -137,6 +137,7 @@ class OpenAIProvider(LLMProvider):
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
         return data["choices"][0]["message"]["content"]
+        print(data)
 
 
 class AnthropicProvider(LLMProvider):
