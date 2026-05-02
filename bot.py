@@ -7,6 +7,8 @@ from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from typing import Any
 
+
+
 from store import (
     store_context,
     get_context,
@@ -19,6 +21,8 @@ from store import (
 from composer import compose
 from reply_handler import handle_reply
 from loader import load_all_data
+
+load_all_data()
 
 app = FastAPI()
 START_TIME = time.time()
@@ -64,7 +68,7 @@ async def metadata():
     return {
         "team_name": "Satyam Gupta",
         "team_members": ["Satyam Gupta"],
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-5",
         "approach": "4-context composer with trigger routing, auto-reply detection, customer reply branching, and 10 gold-standard few-shot examples",
         "contact_email": "your-real-email@gmail.com",
         "version": "2.0.0",
