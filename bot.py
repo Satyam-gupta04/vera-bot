@@ -22,10 +22,10 @@ from composer import compose
 from reply_handler import handle_reply
 from loader import load_all_data
 
-load_all_data()
-
 app = FastAPI()
 START_TIME = time.time()
+
+load_all_data()
 
 VALID_SCOPES = {"category", "merchant", "customer", "trigger"}
 
