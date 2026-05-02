@@ -17,7 +17,7 @@ def store_context(scope: str, context_id: str, version: int, payload: dict) -> d
     key = (scope, context_id)
     existing = contexts.get(key)
 
-    if existing and existing["version"] >= version:
+    if existing and existing["version"] > version:
         return {
             "accepted": False,
             "reason": "stale_version",
